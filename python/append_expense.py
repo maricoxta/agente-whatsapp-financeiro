@@ -17,7 +17,8 @@ def find_open_workbook(excel, path):
 
 
 def main():
-    payload = json.loads(sys.stdin.read())
+    raw = sys.stdin.buffer.read().decode('utf-8')
+    payload = json.loads(raw)
     path = payload['planilha']
     descricao = payload['descricao']
     valor = payload['valorPrevisto']

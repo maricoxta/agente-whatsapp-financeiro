@@ -27,6 +27,18 @@ function formatCurrencyBR(value) {
   return value.toFixed(2).replace('.', ',');
 }
 
+// A Meta reporta o remetente sem o "9" extra dos celulares brasileiros
+// (ex: 556199909885), mas exige esse dígito para enviar mensagens
+// (ex: 5561999909885). Reinsere o dígito só para o envio da resposta.
+function toSendableBrazilNumber(waId) {
+  if (/^55\d{10}$/.test(waId)) {
+    const ddd = waId.slice(2, 4);
+    const numero = waId.slice(4);
+    return `55${ddd}9${numero}`;
+  }
+  return waId;
+}
+
 async function sendWhatsAppReply(to, body) {
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return;
   const url = `https://graph.facebook.com/v20.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
@@ -80,9 +92,11 @@ app.post('/webhook', (req, res) => {
   const text = message.text.body;
   const parsed = parseExpenseMessage(text);
 
+  const replyTo = toSendableBrazilNumber(from);
+
   if (!parsed) {
     sendWhatsAppReply(
-      from,
+      replyTo,
       '⚠️ Não consegui entender essa mensagem. Use o formato: "descrição - valor" (ex: mercado - crédito - 48,03).',
     );
     return;
@@ -100,13 +114,13 @@ app.post('/webhook', (req, res) => {
     .then((linha) => {
       console.log(`Linha ${linha}: ${parsed.descricao} - R$ ${formatCurrencyBR(parsed.valorPrevisto)} - ${dataVencimento}`);
       sendWhatsAppReply(
-        from,
+        replyTo,
         `✅ "${parsed.descricao}" - R$ ${formatCurrencyBR(parsed.valorPrevisto)} registrado (venc. ${dataVencimento}).`,
       );
     })
     .catch((err) => {
       console.error('Erro ao gravar na planilha:', err.message);
-      sendWhatsAppReply(from, `❌ Não consegui gravar na planilha: ${err.message}`);
+      sendWhatsAppReply(replyTo, `❌ Não consegui gravar na planilha: ${err.message}`);
     });
 });
 
