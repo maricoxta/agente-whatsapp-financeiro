@@ -82,25 +82,36 @@ npm start
 ```
 Deve aparecer: `Agente financeiro escutando na porta 3000`.
 
-## 4. Expor o servidor com ngrok
+## 4. Expor o servidor com ngrok (domínio fixo)
 
-Em outro terminal:
-```powershell
-ngrok http 3000
-```
-Copie a URL HTTPS gerada (algo como `https://xxxx-xx-xx.ngrok-free.app`).
+O plano grátis do ngrok muda a URL a cada reinício, a menos que você reserve
+um **domínio estático** (grátis, 1 por conta):
 
-> Atenção: no plano gratuito do ngrok essa URL muda a cada reinício — será
-> preciso atualizar o webhook na Meta sempre que reiniciar o túnel.
+1. Crie uma conta em https://dashboard.ngrok.com/signup
+2. Pegue seu authtoken em https://dashboard.ngrok.com/get-started/your-authtoken
+   e rode uma vez: `ngrok config add-authtoken SEU_TOKEN`
+3. Reserve um domínio fixo em https://dashboard.ngrok.com/domains (algo como
+   `seu-nome.ngrok-free.dev`)
+4. Suba o túnel sempre com esse domínio:
+   ```powershell
+   ngrok http --url=seu-nome.ngrok-free.dev 3000
+   ```
+
+Neste projeto o domínio reservado é `anew-sugar-detest.ngrok-free.dev` (já
+configurado em `start-agent.ps1`).
 
 ## 5. Configurar o webhook na Meta
 
-1. Em **WhatsApp > Configuration**, clique em **Edit** no Webhook.
-2. **Callback URL**: `https://xxxx-xx-xx.ngrok-free.app/webhook`
+1. Em **Casos de uso > Conectar no WhatsApp > Etapa 2. Configuração da
+   produção**, clique em **Editar** no Webhook.
+2. **Callback URL**: `https://anew-sugar-detest.ngrok-free.dev/webhook`
 3. **Verify Token**: o mesmo valor que você colocou em `VERIFY_TOKEN` no `.env`
-4. Clique em **Verify and Save** (a Meta chama o `GET /webhook` do servidor
+4. Clique em **Verificar e salvar** (a Meta chama o `GET /webhook` do servidor
    para confirmar).
-5. Em **Webhook fields**, clique em **Manage** e assine o campo `messages`.
+5. Na lista de **Campos do webhook**, ative o toggle do campo **`messages`**.
+
+Como o domínio é fixo, essa configuração só precisa ser feita **uma vez** —
+reiniciar o servidor, o túnel ou o PC não muda a URL.
 
 ## 6. Testar
 
@@ -114,12 +125,33 @@ O agente deve responder confirmando o registro, e a linha aparecerá na aba
 assim que a próxima ação de tela atualizar a planilha — o Excel salva
 automaticamente).
 
+## Inicialização automática (start-agent.ps1)
+
+O arquivo `start-agent.ps1` sobe o servidor Node e o túnel ngrok juntos, e
+**reinicia sozinho** qualquer um dos dois se ele cair (verifica a cada 15s).
+Ele roda automaticamente porque há um atalho para ele na pasta de
+inicialização do Windows:
+`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\AgenteFinanceiroWhatsApp.lnk`
+
+Ou seja: **basta manter o PC ligado e logado** — o agente sobe sozinho no
+login e se recupera de travamentos automaticamente. Os logs ficam em
+`agente-whatsapp/logs/` (`server.log`, `ngrok.log` e as versões `-err.log`).
+
+Para rodar manualmente (sem esperar o login):
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Users\Mariana\OneDrive\Agente Financeiro\agente-whatsapp\start-agent.ps1"
+```
+
+Para remover a inicialização automática, apague o atalho `.lnk` mencionado
+acima.
+
 ## Observações importantes
 
-- **Mantenha o PC ligado** e o `npm start` rodando — é assim que o agente
-  "escuta" o WhatsApp continuamente.
-- **Não feche o ngrok** enquanto estiver testando (a URL pública só existe
-  enquanto o túnel estiver ativo).
+- **Mantenha o PC ligado e logado** — é assim que o agente "escuta" o
+  WhatsApp continuamente (a gravação depende do Excel local).
+- **Token permanente**: o `WHATSAPP_TOKEN` atual é de um System User
+  (`expires_at: 0`), não expira sozinho — mas se for revogado no Business
+  Settings, precisa gerar outro.
 - **Não versionar o `.env`** (já está no `.gitignore`) — ele contém tokens
   sensíveis.
 - Se a planilha estiver aberta no Excel no momento em que uma mensagem chega,
@@ -127,6 +159,10 @@ automaticamente).
   ele abre, grava e fecha sozinho.
 - Mensagens que não seguem nenhum dos 3 formatos reconhecidos recebem uma
   resposta de erro pelo WhatsApp e não são gravadas.
+- A confirmação de recebimento por WhatsApp só funciona depois que a conta
+  completar a **verificação de empresa** na Meta (sem ela, a Meta bloqueia
+  envios para números no Brasil com o erro 130497). A gravação na planilha
+  não depende disso.
 
 ## Rodar os testes automatizados do parser
 
